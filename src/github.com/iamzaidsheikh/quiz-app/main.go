@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 )
 
 type problem struct {
@@ -14,6 +15,7 @@ type problem struct {
 
 func main() {
 	csvFileName := flag.String("csv", "problems.csv", "a csv file in the format of 'question,answer'") // flag name, default value, desc
+	timeLimit := flag.Int("time", 30, "time limit for the quiz in seconds")
 	flag.Parse()
 
 	file, err := os.Open(*csvFileName) // csvFileName gives us a pointer to a string
@@ -28,22 +30,37 @@ func main() {
 	}
 	problems := parseLines(lines)
 
+	// start a new timer
+	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
+
 	correct := 0
 
+problemLoop: // this is a label
 	for i, p := range problems {
-		fmt.Printf("Problem #%d: %s = \n", i+1, p.q)
-		var answer string
-		// scanf removes leading and trailing spaces so it will only catch 1 word
-		// store the value in answer
-		fmt.Scanf("%s\n", &answer)
-		if answer == p.a {
-			fmt.Println("Correct!")
-			correct++
+		fmt.Printf("Problem #%d: %s = ", i+1, p.q)
+		answerCh := make(chan string)
+		go func() {
+			var answer string
+			// scanf removes leading and trailing spaces so it will only catch 1 word
+			// store the value in answer
+			fmt.Scanf("%s\n", &answer) // note that scanf blocks the program until we get an input that's why its in a go routine
+			answerCh <- answer
+		}()
+		select {
+		case <-timer.C:
+			fmt.Println()
+			// return or
+			break problemLoop // break to the label
+		case answer := <-answerCh:
+			if answer == p.a {
+				fmt.Println("Correct!")
+				correct++
+			}
 		}
+
 	}
 
 	fmt.Printf("You scored %d out of %d\n", correct, len(problems))
-
 }
 
 func exit(msg string) {
